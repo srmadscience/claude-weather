@@ -35,7 +35,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>ie.rolfe.Main</mainClass>
+                            <mainClass>ie.rolfe.weatherradar.GetRadar</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

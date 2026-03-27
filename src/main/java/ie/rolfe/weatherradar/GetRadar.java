@@ -1,4 +1,4 @@
-package ie.rolfe;
+package ie.rolfe.weatherradar;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -41,8 +41,7 @@ import java.util.concurrent.TimeUnit;
  * Build:  mvn package
  * Run:    java -jar target/Claude001-1.0-SNAPSHOT-jar-with-dependencies.jar
  */
-public class
-Main {
+public class GetRadar {
 
     // Centre of the tile download grid – Dublin city centre
     private static final double DUBLIN_LAT = 53.3498;
@@ -81,7 +80,7 @@ Main {
     private final HttpClient http;
     private final ScheduledExecutorService scheduler;
 
-    public Main() {
+    public GetRadar() {
         this.http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -301,7 +300,7 @@ Main {
     }
 
     public static void main(String[] args) {
-        new Main().start();
+        new GetRadar().start();
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
