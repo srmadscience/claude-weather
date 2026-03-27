@@ -302,6 +302,8 @@ public class GetRadar {
     }
 
     public static void main(String[] args) {
+        // Required for headless environments (e.g. Raspberry Pi with no display)
+        System.setProperty("java.awt.headless", "true");
         new GetRadar().start();
         try {
             Thread.currentThread().join();
