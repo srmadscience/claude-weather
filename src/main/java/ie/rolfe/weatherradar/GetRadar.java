@@ -243,6 +243,8 @@ public class GetRadar {
             String ts  = FILE_FMT.format(Instant.now());
             Path   out = OUTPUT_DIR.resolve("dublin_radar_" + ts + ".png");
             ImageIO.write(output, "PNG", out.toFile());
+            Files.copy(out, OUTPUT_DIR.resolve("latest.png"),
+                       java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             System.out.println("  Saved: " + out.toAbsolutePath());
 
         } catch (Exception e) {
