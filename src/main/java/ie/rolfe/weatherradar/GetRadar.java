@@ -145,12 +145,15 @@ public class GetRadar {
 
     // ── RainViewer API ───────────────────────────────────────────────────────
 
-    private String latestRadarPath() throws IOException, InterruptedException {
+    record RadarFrame(String path, long time) {}
+
+    private RadarFrame latestRadarFrame() throws IOException, InterruptedException {
         String json = new String(get(RAINVIEWER_API));
         JsonObject root  = JsonParser.parseString(json).getAsJsonObject();
         JsonArray  past  = root.getAsJsonObject("radar").getAsJsonArray("past");
         if (past.isEmpty()) throw new IOException("No past radar frames in API response");
-        return past.get(past.size() - 1).getAsJsonObject().get("path").getAsString();
+        JsonObject frame = past.get(past.size() - 1).getAsJsonObject();
+        return new RadarFrame(frame.get("path").getAsString(), frame.get("time").getAsLong());
     }
 
     // ── Main download task ───────────────────────────────────────────────────
@@ -158,8 +161,9 @@ public class GetRadar {
     private void downloadAndSave() {
         System.out.printf("[%s] Fetching radar data…%n", Instant.now());
         try {
-            String radarPath = latestRadarPath();
-            System.out.println("  Radar frame: " + radarPath);
+            RadarFrame frame = latestRadarFrame();
+            String radarPath = frame.path();
+            System.out.println("  Radar frame: " + radarPath + "  (time=" + frame.time() + ")");
 
             int cx   = lonToTileX(DUBLIN_LON, ZOOM);
             int cy   = latToTileY(DUBLIN_LAT, ZOOM);
@@ -236,7 +240,7 @@ public class GetRadar {
             og.dispose();
 
             // 4. Timestamp label
-            stampImage(output, radarPath);
+            stampImage(output, frame.time());
 
             // 5. Save
             Files.createDirectories(OUTPUT_DIR);
@@ -257,15 +261,8 @@ public class GetRadar {
         return Math.max(min, Math.min(max, value));
     }
 
-    private void stampImage(BufferedImage img, String radarPath) {
-        String[] parts = radarPath.split("/");
-        String label;
-        try {
-            long epoch = Long.parseLong(parts[parts.length - 1]);
-            label = "Dublin / Leinster Radar  |  " + LABEL_FMT.format(Instant.ofEpochSecond(epoch));
-        } catch (NumberFormatException e) {
-            label = "Dublin / Leinster Radar  |  " + LABEL_FMT.format(Instant.now());
-        }
+    private void stampImage(BufferedImage img, long epoch) {
+        String label = "Dublin / Leinster Radar  |  " + LABEL_FMT.format(Instant.ofEpochSecond(epoch));
         label += "  |  © RainViewer · © OpenStreetMap contributors";
 
         Graphics2D g = img.createGraphics();
