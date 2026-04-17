@@ -273,7 +273,7 @@ public class GetRadar {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         FontMetrics fm = g.getFontMetrics();
 
-        int pad = 6, bx = 8, by = img.getHeight() - fm.getHeight() - pad * 2 - 8;
+        int pad = 6, bx = 8, by = img.getHeight() - fm.getHeight() - pad * 2 - 28;
         int bw  = fm.stringWidth(label) + pad * 2;
         int bh  = fm.getHeight() + pad * 2;
 
