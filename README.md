@@ -8,7 +8,8 @@ which can them be displayed as a background on a computer screen.
 * When I asked for the image be cropped to 16:9 (for a screen), it stretched it instead and had to be chided.
 * When I asked for the zoom to be increased it didn't notice it's changes didn't work, as the API still returned data.
 
-## Prompts
+## Prompts2
+
 
 * Please write a java application that finds and downloads a weather radar map of dublin, ireland, at 15 minute intervals                                                 
 * Please change the coverage so it focuses on Dublin and Leinster 
