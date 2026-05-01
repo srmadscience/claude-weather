@@ -66,17 +66,23 @@ public class GetRadar {
             "https://api.rainviewer.com/public/weather-maps.json";
     private static final String RADAR_TILE_BASE =
             "https://tilecache.rainviewer.com";
-    private static final String OSM_TILE_BASE =
-            "https://tile.openstreetmap.org";
+    // Carto Voyager basemap. Carto's CDN explicitly permits programmatic use
+    // (with attribution) and does not block automated clients the way the
+    // OSM Foundation tile servers do. The underlying data is still OSM.
+    private static final String BASEMAP_TILE_URL_TEMPLATE =
+            "https://basemaps.cartocdn.com/rastertiles/voyager/%d/%d/%d.png";
 
     private static final Path OUTPUT_DIR = Path.of("radar_images");
-    private static final Path OSM_CACHE_DIR = Path.of("osm_tile_cache");
+    private static final Path BASEMAP_CACHE_DIR = Path.of("basemap_tile_cache");
 
-    // OSM tile usage policy requires a User-Agent identifying the application
-    // and a contact address. See https://operations.osmfoundation.org/policies/tiles/
     private static final String USER_AGENT =
             "DublinRadarDownloader/1.0 (+contact: David.Rolfe@pobox.com; "
             + "https://github.com/srmadscience)";
+
+    // SHA-256 of the OSM Foundation "Access blocked" tile. If a basemap
+    // request ever returns this body we refuse to cache it.
+    private static final String OSM_BLOCKED_TILE_SHA256 =
+            "b02c44252dac5a5e820ecef1e9bf9200e9407c042df668a466a1aa81a9ecca7a";
     private static final DateTimeFormatter FILE_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
                              .withZone(ZoneId.of("Europe/Dublin"));
@@ -151,25 +157,38 @@ public class GetRadar {
     }
 
     /**
-     * Fetch an OpenStreetMap tile, caching it on disk indefinitely.
-     * Base-map tiles for a fixed area at a fixed zoom never change, so a
-     * persistent cache keeps us within OSM's tile usage policy: tiles are
-     * downloaded once and reused on every subsequent run.
+     * Fetch a basemap tile, caching it on disk indefinitely. Tiles for a
+     * fixed area at a fixed zoom never change, so we download each tile
+     * once and reuse it on every subsequent run.
      */
-    private BufferedImage fetchOsmTile(int zoom, int tx, int ty)
+    private BufferedImage fetchBasemapTile(int zoom, int tx, int ty)
             throws IOException, InterruptedException {
-        Path cached = OSM_CACHE_DIR.resolve(zoom + "/" + tx + "/" + ty + ".png");
+        Path cached = BASEMAP_CACHE_DIR.resolve(zoom + "/" + tx + "/" + ty + ".png");
         if (Files.exists(cached)) {
             BufferedImage img = ImageIO.read(cached.toFile());
             if (img != null) return img;
         }
-        String url = "%s/%d/%d/%d.png".formatted(OSM_TILE_BASE, zoom, tx, ty);
+        String url = BASEMAP_TILE_URL_TEMPLATE.formatted(zoom, tx, ty);
         byte[] bytes = get(url);
+        if (sha256(bytes).equals(OSM_BLOCKED_TILE_SHA256)) {
+            throw new IOException("Refusing to cache OSM 'Access blocked' tile from " + url);
+        }
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+        if (img == null) throw new IOException("Could not decode basemap tile from " + url);
         Files.createDirectories(cached.getParent());
         Files.write(cached, bytes);
-        BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
-        if (img == null) throw new IOException("Could not decode OSM tile from " + url);
         return img;
+    }
+
+    private static String sha256(byte[] bytes) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ── RainViewer API ───────────────────────────────────────────────────────
@@ -215,9 +234,9 @@ public class GetRadar {
                     int px  = (dx + half) * TILE_PX;
                     int py  = (dy + half) * TILE_PX;
                     try {
-                        g.drawImage(fetchOsmTile(ZOOM, tx, ty), px, py, null);
+                        g.drawImage(fetchBasemapTile(ZOOM, tx, ty), px, py, null);
                     } catch (Exception e) {
-                        System.err.println("  OSM tile failed [" + tx + "," + ty + "]: " + e.getMessage());
+                        System.err.println("  Basemap tile failed [" + tx + "," + ty + "]: " + e.getMessage());
                     }
                 }
             }
@@ -291,7 +310,7 @@ public class GetRadar {
 
     private void stampImage(BufferedImage img, long epoch) {
         String label = "Dublin / Leinster Radar  |  " + LABEL_FMT.format(Instant.ofEpochSecond(epoch));
-        label += "  |  © RainViewer · © OpenStreetMap contributors";
+        label += "  |  © RainViewer · © OpenStreetMap contributors · © CARTO";
 
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
