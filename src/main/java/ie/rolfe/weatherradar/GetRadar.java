@@ -70,6 +70,13 @@ public class GetRadar {
             "https://tile.openstreetmap.org";
 
     private static final Path OUTPUT_DIR = Path.of("radar_images");
+    private static final Path OSM_CACHE_DIR = Path.of("osm_tile_cache");
+
+    // OSM tile usage policy requires a User-Agent identifying the application
+    // and a contact address. See https://operations.osmfoundation.org/policies/tiles/
+    private static final String USER_AGENT =
+            "DublinRadarDownloader/1.0 (+contact: David.Rolfe@pobox.com; "
+            + "https://github.com/srmadscience)";
     private static final DateTimeFormatter FILE_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
                              .withZone(ZoneId.of("Europe/Dublin"));
@@ -127,7 +134,7 @@ public class GetRadar {
     private byte[] get(String url) throws IOException, InterruptedException {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .header("User-Agent", "DublinRadarDownloader/1.0")
+                .header("User-Agent", USER_AGENT)
                 .GET()
                 .build();
         HttpResponse<byte[]> resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
@@ -140,6 +147,28 @@ public class GetRadar {
     private BufferedImage fetchImage(String url) throws IOException, InterruptedException {
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(get(url)));
         if (img == null) throw new IOException("Could not decode image from " + url);
+        return img;
+    }
+
+    /**
+     * Fetch an OpenStreetMap tile, caching it on disk indefinitely.
+     * Base-map tiles for a fixed area at a fixed zoom never change, so a
+     * persistent cache keeps us within OSM's tile usage policy: tiles are
+     * downloaded once and reused on every subsequent run.
+     */
+    private BufferedImage fetchOsmTile(int zoom, int tx, int ty)
+            throws IOException, InterruptedException {
+        Path cached = OSM_CACHE_DIR.resolve(zoom + "/" + tx + "/" + ty + ".png");
+        if (Files.exists(cached)) {
+            BufferedImage img = ImageIO.read(cached.toFile());
+            if (img != null) return img;
+        }
+        String url = "%s/%d/%d/%d.png".formatted(OSM_TILE_BASE, zoom, tx, ty);
+        byte[] bytes = get(url);
+        Files.createDirectories(cached.getParent());
+        Files.write(cached, bytes);
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(bytes));
+        if (img == null) throw new IOException("Could not decode OSM tile from " + url);
         return img;
     }
 
@@ -185,9 +214,8 @@ public class GetRadar {
                     int ty  = cy + dy;
                     int px  = (dx + half) * TILE_PX;
                     int py  = (dy + half) * TILE_PX;
-                    String url = "%s/%d/%d/%d.png".formatted(OSM_TILE_BASE, ZOOM, tx, ty);
                     try {
-                        g.drawImage(fetchImage(url), px, py, null);
+                        g.drawImage(fetchOsmTile(ZOOM, tx, ty), px, py, null);
                     } catch (Exception e) {
                         System.err.println("  OSM tile failed [" + tx + "," + ty + "]: " + e.getMessage());
                     }
