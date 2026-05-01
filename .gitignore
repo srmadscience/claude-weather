@@ -65,3 +65,6 @@ build/
 
 ### Generated radar images ###
 radar_images/
+
+### Cached basemap tiles ###
+basemap_tile_cache/
